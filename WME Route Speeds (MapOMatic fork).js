@@ -1303,7 +1303,7 @@
             routeDiv.onclick = function(){ toggleRoute(i) };
             if (routeSelected == i) routeDiv.className = 'routespeeds_summary_classB';
 
-            let html = '<div class=routespeeds_header style="background: ' + getRouteColor(i) + '; color: #e0e0e0; "></div>' + '<div style="color: #404040; min-width:24px; display:inline-block; text-align:right;"><b>' + (i+1) + '.</b></div>';
+            let html = '<div class=routespeeds_header style="background: ' + getRouteColor(i) + '; color:#e0e0e0; "></div>' + '<div style="min-width:24px; display:inline-block; font-size:14px; color:#404040; text-align:right;"><b>' + (i+1) + '.</b></div>';
 
             let lengthM = 0;
             for (let s = 0; s < routesShown[i].response.results.length; s++) {
@@ -1316,24 +1316,27 @@
             let time = options.freeFlow ? routesShown[i].response.totalRouteTimeFreeFlow : options.liveTraffic ? routesShown[i].response.totalRouteTime : routesShown[i].response.totalRouteTimeWithoutRealtime;
             let timeText = getTimeText(time);
 
-            html += '<div style="min-width:57px; display:inline-block; text-align:right;">' + lengthText + '</div>' + '<span style="font-size:11px;"> ' + lengthUnit + '</span>';
-            html += '<div style="min-width:75px; display:inline-block; text-align:right;"><b>' + timeText + '</b></div>';
+            html += '<div style="min-width:57px; display:inline-block; font-size:14px; text-align:right;">' + lengthText + '</div>' + '<span style="color:#404040;"> ' + lengthUnit + '</span>';
+            html += '<div style="min-width:75px; display:inline-block; font-size:14px; text-align:right;"><b>' + timeText + '</b></div>';
 
             let avgSpeed = getSpeed(lengthM, time);
             if (options.useMiles) avgSpeed /= KM_PER_MILE;
-            html += '<div style="min-width:48px; display:inline-block; text-align:right; color:#404040" >' + avgSpeed.toFixed(1) + '</div><span style="font-size:11px; color:#404040"> ' + speedUnit + '</span>';
+            html += '<div style="min-width:48px; display:inline-block; font-size:14px; text-align:right;" >' + avgSpeed.toFixed(1) + '</div><span style="color:#404040;"> ' + speedUnit + '</span>';
 
             if (options.extraInfo) {
-                let realtime_plus_penalty = 0;
-                let freeflow_plus_penalty = 0;
+                let total_penalty = 0;
                 for (let s = 0; s < routesShown[i].response.results.length; s++) {
-                    realtime_plus_penalty += routesShown[i].response.results[s].crossTime + routesShown[i].response.results[s].penalty;
-                    freeflow_plus_penalty += routesShown[i].response.results[s].crossTimeFreeFlow + routesShown[i].response.results[s].penalty;
+                    total_penalty += routesShown[i].response.results[s].penalty;
                 }
-                html += '<br><div style="display:inline-block;">' + getTimeText(freeflow_plus_penalty) + '</div><span style="font-size:11px;"> FF+P</span>';
-                html += '<div style="min-width:70px; display:inline-block; text-align:right;">' + getTimeText(realtime_plus_penalty) + '</div><span style="font-size:11px;"> RT+P</span>';
-                html += '<div style="min-width:62px; display:inline-block; text-align:right;">' + routesShown[i].response.astarVisited + '</div><span style="font-size:11px;"> V</span>';
+                let traffic_plus_penalty = (options.liveTraffic ? routesShown[i].response.totalRouteTime : routesShown[i].response.totalRouteTimeWithoutRealtime) + total_penalty;
+                let freeflow_plus_penalty = routesShown[i].response.totalRouteTimeFreeFlow + total_penalty;
+
+                html += '<br><div style="display:inline-block;">' + getTimeText(total_penalty) + '</div><span style="color:#404040;"> P</span>';
+                html += '<div style="min-width:55px; display:inline-block; text-align:right;">' + getTimeText(freeflow_plus_penalty) + '</div><span style="color:#404040;"> FP</span>';
+                html += '<div style="min-width:55px; display:inline-block; text-align:right;">' + getTimeText(traffic_plus_penalty) + '</div><span style="color:#404040;"> TP</span>';
+                html += '<div style="min-width:49px; display:inline-block; text-align:right;">' + routesShown[i].response.astarVisited + '</div><span style="color:#404040;"> V</span>';
             }
+
             if (options.showRouteText) {
                 let maxWidth = options.useMiles ? 277 : 270;
                 let laneTypes = [];
@@ -1342,7 +1345,7 @@
                 let separator = '';
                 if (routesShown[i].response.minPassengers) separator += " (" + routesShown[i].response.minPassengers + "+)";
                 if (laneTypes.length) separator += ': ';
-                html += '<div style="max-width:' + maxWidth + 'px; white-space:normal; line-height:normal; font-size:11px; font-variant-numeric:normal;">' + laneTypes.join(', ') + separator + routesShown[i].response.routeName + '</div>';
+                html += '<div style="max-width:' + maxWidth + 'px; white-space:normal; line-height:normal; font-variant-numeric:normal;">' + laneTypes.join(', ') + separator + routesShown[i].response.routeName + '</div>';
             }
 
             routeDiv.innerHTML = html;
@@ -1923,7 +1926,7 @@
             '<b><div id=routespeeds-error style="color:#FF0000"></div></b>' +
             '<div id=routespeeds-routecount></div>' +
 
-            '<div id=routespeeds-summaries style="font-variant-numeric:tabular-nums;"></div>' +
+            '<div id=routespeeds-summaries style="font-size:11px; font-variant-numeric:tabular-nums;"></div>' +
 
             '<div style="margin-bottom:4px;">' +
             '<b>Options:</b>' +
@@ -1942,8 +1945,8 @@
             getCheckboxHtml('livetraffic', 'Use real-time traffic', 'Note: this only seems to affect routes within the last 30-60 minutes, up to Now') +
             getCheckboxHtml('showSpeeds', 'Show speed on labels') +
             getCheckboxHtml('usemiles', 'Use miles and mph') +
+            getCheckboxHtml('extrainfo', 'Show extra routing information') +
             getCheckboxHtml('routetext', 'Show route descriptions') +
-            getCheckboxHtml('extrainfo', 'Show extra route information') +
 
             '<div>' +
             getCheckboxHtml('getalternatives', 'Alternative routes: show', '', { display: 'inline-block' }) +
