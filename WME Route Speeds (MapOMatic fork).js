@@ -46,6 +46,10 @@
         avoidUnpaved: true,
         avoidLongUnpaved: false,
         allowUTurns: true,
+        extraInfo: false,
+        includeCrossTime: true,
+        includePenalty: false,
+        freeFlow: false,
         passes: []
     };
 
@@ -322,6 +326,10 @@
         getId('routespeeds-avoiddifficult').checked = options.avoidDifficult;
         getId('routespeeds-avoidferries').checked = options.avoidFerries;
         getId('routespeeds-vehicletype').value = options.vehicleType;
+        getId('routespeeds-extrainfo').checked = options.extraInfo;
+        getId('routespeeds-includecrosstime').checked = options.includeCrossTime;
+        getId('routespeeds-includepenalty').checked = options.includePenalty;
+        getId('routespeeds-freeflow').checked = options.freeFlow;
     }
     //---------------------------------------------------------------------------------------
     function getRoutingManager() {
@@ -393,8 +401,17 @@
     //------------------------------------------------------------------------------------------------
     function getLabelTime(routeSegmentInfo) {
         let time = 0;
-        if (options.liveTraffic) time += routeSegmentInfo.crossTime;
-        else time += routeSegmentInfo.crossTimeWithoutRealTime;
+        if (options.includeCrossTime) {
+            if (options.freeFlow) {
+                time += routeSegmentInfo.crossTimeFreeFlow;
+            } else {
+                if (options.liveTraffic) time += routeSegmentInfo.crossTime;
+                else time += routeSegmentInfo.crossTimeWithoutRealTime;
+            }
+        }
+        if (options.includePenalty) {
+            time += routeSegmentInfo.penalty;
+        }
         return time;
     }
     //------------------------------------------------------------------------------------------------
@@ -416,6 +433,13 @@
     function getRouteColor(route) {
         let i = route % routeColors.length;
         return routeColors[i];
+    }
+    //-----------------------------------------------------------------------------------------------
+    function getTimeText(time) {
+        let seconds = time % 60;
+        let minutes = Math.floor((time % 3600) / 60);
+        let hours = Math.floor(time / 3600);
+        return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
     }
     //-----------------------------------------------------------------------------------------------
     function updatePassesLabel() {
@@ -1289,19 +1313,27 @@
             if (options.useMiles) length /= KM_PER_MILE;
             let lengthText = length.toFixed(2);
 
-            let timeS = options.liveTraffic ? routesShown[i].response.totalRouteTime : routesShown[i].response.totalRouteTimeWithoutRealtime;
-            let seconds = timeS % 60;
-            let minutes = Math.floor((timeS % 3600) / 60);
-            let hours = Math.floor(timeS / 3600);
-            let timeText = String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+            let time = options.freeFlow ? routesShown[i].response.totalRouteTimeFreeFlow : options.liveTraffic ? routesShown[i].response.totalRouteTime : routesShown[i].response.totalRouteTimeWithoutRealtime;
+            let timeText = getTimeText(time);
 
             html += '<div style="min-width:57px; display:inline-block; text-align:right;">' + lengthText + '</div>' + '<span style="font-size:11px;"> ' + lengthUnit + '</span>';
             html += '<div style="min-width:75px; display:inline-block; text-align:right;"><b>' + timeText + '</b></div>';
 
-            let avgSpeed = getSpeed(lengthM, timeS);
+            let avgSpeed = getSpeed(lengthM, time);
             if (options.useMiles) avgSpeed /= KM_PER_MILE;
-            html += '<div style="min-width:48px; display:inline-block; text-align:right; color:#404040" >' + avgSpeed.toFixed(1) + '</div><span style="font-size:11px;"> ' + speedUnit + '</span>';
+            html += '<div style="min-width:48px; display:inline-block; text-align:right; color:#404040" >' + avgSpeed.toFixed(1) + '</div><span style="font-size:11px; color:#404040"> ' + speedUnit + '</span>';
 
+            if (options.extraInfo) {
+                let realtime_plus_penalty = 0;
+                let freeflow_plus_penalty = 0;
+                for (let s = 0; s < routesShown[i].response.results.length; s++) {
+                    realtime_plus_penalty += routesShown[i].response.results[s].crossTime + routesShown[i].response.results[s].penalty;
+                    freeflow_plus_penalty += routesShown[i].response.results[s].crossTimeFreeFlow + routesShown[i].response.results[s].penalty;
+                }
+                html += '<br><div style="display:inline-block;">' + getTimeText(freeflow_plus_penalty) + '</div><span style="font-size:11px;"> FF+P</span>';
+                html += '<div style="min-width:70px; display:inline-block; text-align:right;">' + getTimeText(realtime_plus_penalty) + '</div><span style="font-size:11px;"> RT+P</span>';
+                html += '<div style="min-width:62px; display:inline-block; text-align:right;">' + routesShown[i].response.astarVisited + '</div><span style="font-size:11px;"> V</span>';
+            }
             if (options.showRouteText) {
                 let maxWidth = options.useMiles ? 277 : 270;
                 let laneTypes = [];
@@ -1310,7 +1342,7 @@
                 let separator = '';
                 if (routesShown[i].response.minPassengers) separator += " (" + routesShown[i].response.minPassengers + "+)";
                 if (laneTypes.length) separator += ': ';
-                html += '<div style="max-width:' + maxWidth + 'px; white-space:normal; line-height:normal; font-size:11px;">' + laneTypes.join(', ') + separator + routesShown[i].response.routeName + '</div>';
+                html += '<div style="max-width:' + maxWidth + 'px; white-space:normal; line-height:normal; font-size:11px; font-variant-numeric:normal;">' + laneTypes.join(', ') + separator + routesShown[i].response.routeName + '</div>';
             }
 
             routeDiv.innerHTML = html;
@@ -1497,6 +1529,10 @@
         getId('routespeeds-avoiddifficult').checked = options.avoidDifficult = false;
         getId('routespeeds-avoidferries').checked = options.avoidFerries = false;
         getId('routespeeds-vehicletype').value = options.vehicleType = 'PRIVATE';
+        getId('routespeeds-extrainfo').checked = options.extraInfo = false;
+        getId('routespeeds-includecrosstime').checked = options.includeCrossTime = true;
+        getId('routespeeds-includepenalty').checked = options.includePenalty = false;
+        getId('routespeeds-freeflow').checked = options.freeFlow = false;
     }
     //--------------------------------------------------------------------------------------------------------
     function resetOptionsToLivemapRouteClick() {
@@ -1668,6 +1704,26 @@
     function clickVehicleType() {
         options.vehicleType = (getId('routespeeds-vehicletype').value);
         livemapRoute();
+    }
+    //--------------------------------------------------------------------------------------------------------
+    function clickExtraInfo() {
+        options.extraInfo = (getId('routespeeds-extrainfo').checked === true);
+        sortRoutes();
+    }
+    //--------------------------------------------------------------------------------------------------------
+    function clickCrossTime() {
+        options.includeCrossTime = (getId('routespeeds-includecrosstime').checked === true);
+        sortRoutes();
+    }
+    //--------------------------------------------------------------------------------------------------------
+    function clickPenalty() {
+        options.includePenalty = (getId('routespeeds-includepenalty').checked === true);
+        sortRoutes();
+    }
+    //--------------------------------------------------------------------------------------------------------
+    function clickFreeFlow() {
+        options.freeFlow = (getId('routespeeds-freeflow').checked === true);
+        sortRoutes();
     }
     //--------------------------------------------------------------------------------------------------------
     function clickPassOption() {
@@ -1876,9 +1932,18 @@
 
             getCheckboxHtml('enablescript', 'Enable script') +
             getCheckboxHtml('showLabels', 'Show segment labels') +
+            '<div id="routespeeds-crosstime-span" style="display:inline;">' +
+            getCheckboxHtml('includecrosstime', 'Include cross time', '', { marginLeft: '10px' }) +
+            '</div>' +
+            '<div id="routespeeds-penalty-span" style="display:inline;">' +
+            getCheckboxHtml('includepenalty', 'Include penalties', '', { marginLeft: '10px' }) +
+            '</div>' +
+            getCheckboxHtml('freeflow', 'Use free flow speed') +
+            getCheckboxHtml('livetraffic', 'Use real-time traffic', 'Note: this only seems to affect routes within the last 30-60 minutes, up to Now') +
             getCheckboxHtml('showSpeeds', 'Show speed on labels') +
             getCheckboxHtml('usemiles', 'Use miles and mph') +
             getCheckboxHtml('routetext', 'Show route descriptions') +
+            getCheckboxHtml('extrainfo', 'Show extra route information') +
 
             '<div>' +
             getCheckboxHtml('getalternatives', 'Alternative routes: show', '', { display: 'inline-block' }) +
@@ -1898,7 +1963,6 @@
             '</select>' +
             '</div>' +
 
-            getCheckboxHtml('livetraffic', 'Real-Time Traffic', 'Note: this only seems to affect routes within the last 30-60 minutes, up to Now') +
             getCheckboxHtml('routingorder', 'Use Routing Order', 'Sorts routes in the same order they would appear in the app or livemap') +
 
             getCheckboxHtml('userbs', 'Use Routing Beta Server (RBS)', '', { display: window.location.hostname.includes('beta') ? 'inline' : 'none' }) +
@@ -2083,6 +2147,10 @@
         getId('routespeeds-avoiddifficult').onclick = clickAvoidDifficult;
         getId('routespeeds-avoidferries').onclick = clickAvoidFerries;
         getId('routespeeds-vehicletype').onchange = clickVehicleType;
+        getId('routespeeds-extrainfo').onclick = clickExtraInfo;
+        getId('routespeeds-includecrosstime').onclick = clickCrossTime;
+        getId('routespeeds-includepenalty').onclick = clickPenalty;
+        getId('routespeeds-freeflow').onclick = clickFreeFlow;
 
         getId('sidepanel-routespeeds-a').onkeydown = enterAB;
         getId('sidepanel-routespeeds-b').onkeydown = enterAB;
