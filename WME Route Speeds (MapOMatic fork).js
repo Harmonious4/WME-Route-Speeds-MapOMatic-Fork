@@ -2,7 +2,7 @@
 // @name                WME Route Speeds (MapOMatic fork)
 // @description         Shows segment speeds in a route.
 // @include             /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
-// @version             2024.06.24.000
+// @version             2024.09.07.000
 // @grant               GM_xmlhttpRequest
 // @namespace           https://greasyfork.org/en/scripts/369630-wme-route-speeds-mapomatic-fork
 // @require             https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
@@ -128,8 +128,12 @@
 
     var jqueryinfo = 0;
     var tabswitched = 0;
+
     var closurelayer = null;
     var closurelayerZINDEX = [];
+    var pathlayer = null;
+    var pathlayerZINDEX = [];
+
     var leftHand = false;
 
     function log(msg) {
@@ -1256,6 +1260,7 @@
 
                 getId('routespeeds-button-livemap').style.backgroundColor = '';
                 getId('routespeeds-button-reverse').style.backgroundColor = '';
+                switchRoute()
             },
             complete: function () {
                 console.timeEnd('WME Route Speeds: routing time');
@@ -1761,7 +1766,7 @@
         //wlodek76: finding closure layer and changing its zindex to hide it under Route Speeds layer
         //          we cannot easily set route speed layer over markers because it will block access to elements on these layers
         let z = parseInt(routeLayer.getZIndex());
-        let clayers = WM.getLayersBy("uniqueName", "closures");
+        let clayers = WM.getLayersBy("name", "closures");
         if (clayers[0] !== undefined && closurelayer === null) {
 
             closurelayer = clayers[0];
@@ -1772,6 +1777,16 @@
             closurelayer.redraw();
         }
 
+        let pathlayers = WM.getLayersBy("name", "marker_drawing_context_1");
+        if (pathlayers[0] !== undefined) {
+            pathlayer = pathlayers[0]
+            pathlayerZINDEX[0] = pathlayer.getZIndex();
+            pathlayerZINDEX[1] = z - 6;
+
+            pathlayer.setZIndex(pathlayerZINDEX[1]);
+            pathlayer.redraw();
+        }
+
         drawRoutes();
     }
     //--------------------------------------------------------------------------------------------------------
@@ -1779,6 +1794,10 @@
         if (closurelayer !== null && closurelayerZINDEX.length == 2) {
             closurelayer.setZIndex(closurelayerZINDEX[mode]);
             closurelayer.redraw();
+        }
+        if (pathlayer !== null && pathlayerZINDEX.length == 2) {
+            pathlayer.setZIndex(pathlayerZINDEX[mode]);
+            pathlayer.redraw();
         }
     }
     //--------------------------------------------------------------------------------------------------------
