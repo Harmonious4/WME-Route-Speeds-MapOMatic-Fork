@@ -2,7 +2,7 @@
 // @name                WME Route Speeds (MapOMatic fork)
 // @description         Shows segment speeds in a route.
 // @include             /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
-// @version             2024.09.08.000
+// @version             2024.09.18.000
 // @grant               GM_xmlhttpRequest
 // @namespace           https://greasyfork.org/en/scripts/369630-wme-route-speeds-mapomatic-fork
 // @require             https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
@@ -128,9 +128,14 @@
 
     var jqueryinfo = 0;
     var tabswitched = 0;
-    var closurelayer = null;
-    var closurelayerZINDEX = [];
     var leftHand = false;
+
+    const SCRIPT_LAYERS_TO_COVER = ["_LTHighlightLayer", "LTLaneGraphics", "LTNamesLayer"];
+    const WME_LAYERS_TO_MOVE = ["closures", "turn_closure", "closure_nodes"];
+    let layersMoved = [];
+    let originalZIndexes = [];
+    let baseZIndex = 0;
+    let z17_reached = 0;
 
     function log(msg) {
         console.log('WME Route Speeds:', msg);
@@ -219,92 +224,10 @@
     //---------------------------------------------------------------------------------------
     function loadRouteSpeedsOptions() {
 
-        if (localStorage.getItem(SAVED_OPTIONS_KEY)) {
-            try {
-                Object.assign(options, JSON.parse(localStorage.getItem(SAVED_OPTIONS_KEY)));
-            } catch {
-                log("Error loading saved options. Using defaults.");
-            }
-        } else {
-            log("Error loading saved options. Attempting to load from old keys.");
-            if (localStorage.RouteSpeedsOption1) {
-                options.enableScript = (localStorage.RouteSpeedsOption1 == "false");
-                localStorage.removeItem("RouteSpeedsOption1");
-            }
-            if (localStorage.RouteSpeedsOption2) {
-                options.showLabels = (localStorage.RouteSpeedsOption2 == "false");
-                localStorage.removeItem("RouteSpeedsOption2");
-            }
-            if (localStorage.RouteSpeedsOption3) {
-                options.showSpeeds = (localStorage.RouteSpeedsOption3 == "false");
-                localStorage.removeItem("RouteSpeedsOption3");
-            }
-            if (localStorage.RouteSpeedsOption4) {
-                options.useMiles = (localStorage.RouteSpeedsOption4 == "true");
-                localStorage.removeItem("RouteSpeedsOption4");
-            }
-            if (localStorage.RouteSpeedsOption5) {
-                options.getAlternatives = (localStorage.RouteSpeedsOption5 == "true");
-                localStorage.removeItem("RouteSpeedsOption5");
-            }
-            if (localStorage.RouteSpeedsOption6) {
-                options.maxRoutes = (localStorage.RouteSpeedsOption6);
-                localStorage.removeItem("RouteSpeedsOption6");
-            }
-            if (localStorage.RouteSpeedsOption7) {
-                options.liveTraffic = (localStorage.RouteSpeedsOption7 == "true");
-                localStorage.removeItem("RouteSpeedsOption7");
-            }
-            if (localStorage.RouteSpeedsOption8) {
-                options.avoidTolls = (localStorage.RouteSpeedsOption8 == "true");
-                localStorage.removeItem("RouteSpeedsOption8");
-            }
-            if (localStorage.RouteSpeedsOption9) {
-                options.avoidFreeways = (localStorage.RouteSpeedsOption9 == "true");
-                localStorage.removeItem("RouteSpeedsOption9");
-            }
-            if (localStorage.RouteSpeedsOption10) {
-                options.avoidUnpaved = (localStorage.RouteSpeedsOption10 == "true");
-                localStorage.removeItem("RouteSpeedsOption10");
-            }
-            if (localStorage.RouteSpeedsOption11) {
-                options.avoidLongUnpaved = (localStorage.RouteSpeedsOption11 == "true");
-                localStorage.removeItem("RouteSpeedsOption11");
-            }
-            if (localStorage.RouteSpeedsOption12) {
-                localStorage.removeItem("RouteSpeedsOption12");
-            }
-            if (localStorage.RouteSpeedsOption13) {
-                options.routeType = (localStorage.RouteSpeedsOption13);
-                localStorage.removeItem("RouteSpeedsOption13");
-            }
-            if (localStorage.RouteSpeedsOption14) {
-                options.allowUTurns = (localStorage.RouteSpeedsOption14 == "true");
-                localStorage.removeItem("RouteSpeedsOption14");
-            }
-            if (localStorage.RouteSpeedsOption15) {
-                options.routingOrder = (localStorage.RouteSpeedsOption15 == "true");
-                localStorage.removeItem("RouteSpeedsOption15");
-            }
-            if (localStorage.RouteSpeedsOption16) {
-                options.avoidDifficult = (localStorage.RouteSpeedsOption16 == "true");
-                localStorage.removeItem("RouteSpeedsOption16");
-            }
-            if (localStorage.RouteSpeedsOption17) {
-                options.avoidFerries = (localStorage.RouteSpeedsOption17 == "true");
-                localStorage.removeItem("RouteSpeedsOption17");
-            }
-            if (localStorage.RouteSpeedsOption18) {
-                options.vehicleType = (localStorage.RouteSpeedsOption18);
-                localStorage.removeItem("RouteSpeedsOption18");
-            }
-            try {
-                Object.assign(options, JSON.parse(localStorage.getItem('wme_routespeeds')));
-                localStorage.removeItem('wme_routespeeds');
-            } catch {
-                log("Error loading passes from old key. Using default (empty list)");
-            }
-            saveRouteSpeedsOptions();
+        try {
+            Object.assign(options, JSON.parse(localStorage.getItem(SAVED_OPTIONS_KEY)));
+        } catch {
+            log("Error loading saved options. Using defaults.");
         }
 
         getId('routespeeds-enablescript').checked = options.enableScript;
@@ -734,7 +657,7 @@
                 tabswitched = 1;
                 showRouteLayer(false);
                 showMarkers(false);
-                showClosures(0);
+                reorderLayers(0);
             }
             return;
         }
@@ -743,7 +666,7 @@
                 tabswitched = 2;
                 showRouteLayer(true);
                 showMarkers(true);
-                showClosures(1);
+                reorderLayers(1);
             }
         }
 
@@ -869,6 +792,13 @@
 
                     getId('routespeeds-summaries').style.visibility = 'hidden';
                 }
+            }
+        }
+
+        if (!z17_reached) {
+            if (W.map.getZoom() >= 17) {
+                z17_reached = 1;
+                switchRoute();
             }
         }
     }
@@ -1588,13 +1518,13 @@
             if (routeLayer !== undefined) routeLayer.removeAllFeatures();
 
             showMarkers(false);
-            showClosures(0);
+            reorderLayers(0);
         }
         else {
             getId('sidepanel-routespeeds').style.color = "";
 
             if (showMarkers(true)) drawRoutes();
-            showClosures(1);
+            reorderLayers(1);
         }
     }
     //--------------------------------------------------------------------------------------------------------
@@ -1748,38 +1678,45 @@
     }
     //--------------------------------------------------------------------------------------------------------
     function switchRoute() {
-        var WM = W.map;
-
         for (let i = 0; i < routesShown.length; i++) {
             let summary = getId('routespeeds-summary-' + i);
             summary.className = (routeSelected == i) ? 'routespeeds_summary_classB' : 'routespeeds_summary_classA';
         }
 
-        let rlayers = WM.getLayersBy("uniqueName", "__DrawRouteSpeedsLines");
+        let rlayers = W.map.getLayersBy("uniqueName", "__DrawRouteSpeedsLines");
         let routeLayer = rlayers[0];
         if (routeLayer === undefined) return;
 
-        //wlodek76: finding closure layer and changing its zindex to hide it under Route Speeds layer
-        //          we cannot easily set route speed layer over markers because it will block access to elements on these layers
-        let z = parseInt(routeLayer.getZIndex());
-        let clayers = WM.getLayersBy("name", "closures");
-        if (clayers[0] !== undefined && closurelayer === null) {
-
-            closurelayer = clayers[0];
-            closurelayerZINDEX[0] = clayers[0].getZIndex();
-            closurelayerZINDEX[1] = z - 5;
-
-            closurelayer.setZIndex(closurelayerZINDEX[1]);
-            closurelayer.redraw();
+        for (let uniqueName of SCRIPT_LAYERS_TO_COVER) {
+            let layer = W.map.getLayersBy("uniqueName", uniqueName)[0];
+            if (layer === undefined) continue;
+            baseZIndex = Math.max(baseZIndex, layer.getZIndex());
         }
+        if (routeLayer.getZIndex() < baseZIndex) {
+            routeLayer.setZIndex(baseZIndex + 1);
+        } else {
+            baseZIndex = routeLayer.getZIndex();
+        }
+        reorderLayers(1);
 
         drawRoutes();
     }
     //--------------------------------------------------------------------------------------------------------
-    function showClosures(mode) {
-        if (closurelayer !== null && closurelayerZINDEX.length == 2) {
-            closurelayer.setZIndex(closurelayerZINDEX[mode]);
-            closurelayer.redraw();
+    function reorderLayers(mode) {
+        if (baseZIndex == 0) return;
+        for (let i = 0; i < WME_LAYERS_TO_MOVE.length; i++) {
+            if (layersMoved[i] === undefined) {
+                let layer = W.map.getLayersBy("name", WME_LAYERS_TO_MOVE[i])[0];
+                if (layer === undefined) continue;
+                layersMoved[i] = layer;
+                originalZIndexes[i] = layer.getZIndex();
+            }
+            if (mode) {
+                layersMoved[i].setZIndex(baseZIndex - WME_LAYERS_TO_MOVE.length + i);
+            } else {
+                layersMoved[i].setZIndex(originalZIndexes[i]);
+            }
+            layersMoved[i].redraw();
         }
     }
     //--------------------------------------------------------------------------------------------------------
