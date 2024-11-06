@@ -1181,6 +1181,7 @@
                         routesReceived = json.alternatives;
                     }
                     getId('routespeeds-routecount').innerHTML = 'Received <b>' + routesReceived.length + '</b> route' + (routesReceived.length == 1 ? '' : "s") + ' from the server';
+                    console.log(routesReceived);
                     sortRoutes();
                 }
 
