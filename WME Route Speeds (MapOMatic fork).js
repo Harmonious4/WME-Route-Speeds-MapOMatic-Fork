@@ -361,13 +361,34 @@
         return time;
     }
     //------------------------------------------------------------------------------------------------
+    function getFreeFlowLimitType(segmentInfo) {
+        const roadTypeSpeeds = {1: 30, 2: 50, 7: 65, 6: 75, 3: 100, 4: 65, 17: 20};
+        if (!(segmentInfo.roadType in roadTypeSpeeds)) return '';
+        if (3.6 * segmentInfo.length / (segmentInfo.crossTimeFreeFlow + 0.5) < roadTypeSpeeds[segmentInfo.roadType] * 0.55) {
+            return 'lower';
+        } else if (3.6 * segmentInfo.length / (segmentInfo.crossTimeFreeFlow - 0.5) > roadTypeSpeeds[segmentInfo.roadType] + 50) {
+            return 'upper';
+        } else {
+            return '';
+        }
+    }
+    //------------------------------------------------------------------------------------------------
     function getLabelWeight(segmentInfo) {
-        if (options.liveTraffic && segmentInfo.crossTime != segmentInfo.crossTimeWithoutRealTime) return 'bold';
-        else return 'normal';
+        if (options.freeFlow) {
+            if (getFreeFlowLimitType(segmentInfo)) return 'bold';
+            else return 'normal';
+        } else if (options.liveTraffic && segmentInfo.crossTime != segmentInfo.crossTimeWithoutRealTime) {
+            return 'bold';
+        } else {
+            return 'normal';
+        }
     }
     //------------------------------------------------------------------------------------------------
     function getLabelColor(segmentInfo) {
-        if (options.liveTraffic) {
+        if (options.freeFlow) {
+            if (getFreeFlowLimitType(segmentInfo)) return (getFreeFlowLimitType(segmentInfo) == 'lower') ? '#ff9900' : '#99ee00';
+            else return '#f8f8f8';
+        } else if (options.liveTraffic) {
             if (segmentInfo.crossTime != segmentInfo.crossTimeWithoutRealTime) {
                 let ratio = segmentInfo.crossTime / segmentInfo.crossTimeWithoutRealTime;
                 if (ratio > 2) return '#ff0000';
